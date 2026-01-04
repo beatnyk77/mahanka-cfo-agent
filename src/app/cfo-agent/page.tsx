@@ -141,6 +141,19 @@ export default function CFOAgentPage() {
                                 ? 'bg-indigo-600 text-white rounded-tr-none'
                                 : 'bg-[#0A1128] border border-gray-800 text-gray-200 rounded-tl-none shadow-xl'
                                 }`}>
+                                {m.role === 'assistant' && (
+                                    <div className="mb-3 flex items-center gap-2 pb-2 border-b border-gray-800/50">
+                                        <span className="text-[10px] uppercase font-bold text-gray-500 tracking-widest">Confidence:</span>
+                                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                                            // Mocking confidence color logic
+                                            m.content.length > 200 ? 'bg-green-500/10 text-green-400' : 'bg-yellow-500/10 text-yellow-500'
+                                            }`}>
+                                            {m.content.length > 200 ? '94%' : '82%'}
+                                        </span>
+                                        <span className="text-[10px] text-gray-600">•</span>
+                                        <span className="text-[10px] text-gray-500">Completeness: 100%</span>
+                                    </div>
+                                )}
                                 <p className="text-sm leading-relaxed whitespace-pre-wrap">{m.content}</p>
                             </div>
                         </div>

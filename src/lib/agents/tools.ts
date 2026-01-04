@@ -14,7 +14,7 @@ export const deadStockOracleTool = tool(
     },
     {
         name: 'dead_stock_oracle',
-        description: 'Predicts dead stock risk for a list of inventory items.',
+        description: 'Predicts dead stock risk (Risk Monitor).',
         schema: z.object({
             inventoryData: z.array(z.any()).describe('List of inventory items with SKU and other metrics'),
         }),
@@ -94,7 +94,7 @@ export const sendWhatsAppAlertTool = tool(
     },
     {
         name: 'send_whatsapp_alert',
-        description: 'Sends a high-priority financial alert to the management via WhatsApp.',
+        description: 'Sends high-priority alert (Risk Monitor). Human-in-the-loop required.',
         schema: z.object({
             message: z.string().describe('The alert message to send'),
             priority: z.enum(['low', 'medium', 'high']).describe('Priority level of the alert'),

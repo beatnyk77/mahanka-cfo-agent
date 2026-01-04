@@ -2,18 +2,33 @@ import { ChatAnthropic } from '@langchain/anthropic';
 import { StateGraph, MessagesAnnotation, MemorySaver } from '@langchain/langgraph';
 import { ToolNode } from '@langchain/langgraph/prebuilt';
 import { tools } from './tools';
+import { getUserMemory } from '../memory';
 
 const checkpointer = new MemorySaver();
 
 // Specialist Nodes
-async function orchestratorNode(state: typeof MessagesAnnotation.State) {
+async function orchestratorNode(state: typeof MessagesAnnotation.State, config?: any) {
+    const userId = config?.configurable?.user_id || 'default_user';
+    const memory = await getUserMemory(userId);
+
     const model = new ChatAnthropic({
         modelName: 'claude-3-5-sonnet-20240620',
         apiKey: process.env.ANTHROPIC_API_KEY,
     }).bindTools(tools);
 
+    const context = memory.last_actions.length > 0
+        ? `Context from previous interactions: ${memory.last_actions.slice(-3).join(', ')}. Be direct if user ignored prior advice.`
+        : '';
+
     const response = await model.invoke([
-        { role: 'system', content: 'You are the Mahanka CFO Orchestrator. Plan tasks and use specialists for reconciliation, economics, inventory, and forecasting.' },
+        {
+            role: 'system',
+            content: `You are the Mahanka CFO Orchestrator (Internal: Close Engine). Plan tasks and use specialists: Margin Engine (Economics), Risk Monitor (Inventory/Forecast), and Reconciliation Engine.
+          ${context}
+          Every analysis MUST conclude with a Confidence Score in JSON format: 
+          {"confidence": XX, "completeness": YY, "issues": ["flag1", "flag2"]}.
+          Emphasize: "Human-in-the-loop" and "Always by the 10th".`
+        },
         ...state.messages
     ]);
     return { messages: [response] };
