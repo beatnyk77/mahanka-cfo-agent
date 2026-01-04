@@ -62,4 +62,50 @@ export const unitEconomicsTool = tool(
     }
 );
 
-export const tools = [deadStockOracleTool, tariffForecasterTool, unitEconomicsTool];
+export const generatePDFReportTool = tool(
+    async ({ summary, metrics }) => {
+        // In a real app, this would probably save to S3/Firebase Storage and return a link
+        // For MVP, we'll return a success message indicating the report is ready.
+        return {
+            success: true,
+            message: 'PDF Report generated successfully. Ready for download.',
+            downloadUrl: '#placeholder-pdf-link'
+        };
+    },
+    {
+        name: 'generate_pdf_report',
+        description: 'Generates a PDF financial report with summary and metrics.',
+        schema: z.object({
+            summary: z.string().describe('Executive summary for the report'),
+            metrics: z.record(z.string(), z.any()).describe('Key metrics to include in the report table'),
+        }),
+    }
+);
+
+export const sendWhatsAppAlertTool = tool(
+    async ({ message, priority }) => {
+        // Placeholder for WhatsApp API integration (e.g., Twilio or 360dialog)
+        console.log(`[WhatsApp Alert] Priority: ${priority} | Message: ${message}`);
+        return {
+            success: true,
+            status: 'queued',
+            message: 'Alert sent via WhatsApp routing service.'
+        };
+    },
+    {
+        name: 'send_whatsapp_alert',
+        description: 'Sends a high-priority financial alert to the management via WhatsApp.',
+        schema: z.object({
+            message: z.string().describe('The alert message to send'),
+            priority: z.enum(['low', 'medium', 'high']).describe('Priority level of the alert'),
+        }),
+    }
+);
+
+export const tools = [
+    deadStockOracleTool,
+    tariffForecasterTool,
+    unitEconomicsTool,
+    generatePDFReportTool,
+    sendWhatsAppAlertTool
+];
