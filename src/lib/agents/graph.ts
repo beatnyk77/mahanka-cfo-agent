@@ -6,9 +6,12 @@ import { getUserMemory } from '../memory';
 
 const checkpointer = new MemorySaver();
 
-// Specialist Nodes
 async function orchestratorNode(state: typeof MessagesAnnotation.State, config?: any) {
     const userId = config?.configurable?.user_id || 'default_user';
+
+    // Auth Guard Placeholder
+    if (!userId) throw new Error('Unauthorized: No user session found.');
+
     const memory = await getUserMemory(userId);
 
     const model = new ChatAnthropic({
@@ -17,20 +20,41 @@ async function orchestratorNode(state: typeof MessagesAnnotation.State, config?:
     }).bindTools(tools);
 
     const context = memory.last_actions.length > 0
-        ? `Context from previous interactions: ${memory.last_actions.slice(-3).join(', ')}. Be direct if user ignored prior advice.`
-        : '';
+        ? `Agent Memory: Previously, we ${memory.last_actions.slice(-3).join(', ')}. Known Risks: ${memory.known_risks.join(', ') || 'None identified'}.`
+        : 'Agent Memory: No prior history found for this user.';
 
     const response = await model.invoke([
         {
             role: 'system',
-            content: `You are the Mahanka CFO Orchestrator (Internal: Close Engine). Plan tasks and use specialists: Margin Engine (Economics), Risk Monitor (Inventory/Forecast), and Reconciliation Engine.
-          ${context}
-          Every analysis MUST conclude with a Confidence Score in JSON format: 
-          {"confidence": XX, "completeness": YY, "issues": ["flag1", "flag2"]}.
-          Emphasize: "Human-in-the-loop" and "Always by the 10th".`
+            content: `You are the Mahanka CFO Orchestrator (v1.5). 
+            ${context}
+            
+            Specialists:
+            1. Compliance Agent (GST/TDS)
+            2. Projection Agent (Budget/P&L)
+            3. Risk Agent (Fundraising/Inventory)
+            4. Margin Engine (Unit Economics)
+            
+            Your output MUST START with a bracketed Confidence Score header:
+            [CONFIDENCE: XX% | COMPLETENESS: YY% | ISSUES: issue1, issue2]
+            
+            Followed by your "Real Talk" analysis. Emphasize "Human-in-the-loop" for all sensitive actions.
+            Internal Naming: Close Engine (Core), Risk Monitor (Inventory), Valuation Engine (Fundraising).`
         },
         ...state.messages
     ]);
+
+    // Parse Confidence/Completeness for Ledger
+    const headerMatch = response.content.toString().match(/\[CONFIDENCE: (.*?) | COMPLETENESS: (.*?) | ISSUES: (.*?)\]/);
+    const conf = headerMatch ? headerMatch[1] : '85%';
+
+    // Persist to Audit Ledger & Memory
+    const { addActionToMemory, logAgentAction } = await import('../memory');
+    const actionSummary = response.content.toString().slice(0, 100).replace(/\[.*?\]/, '').trim();
+
+    await addActionToMemory(userId, actionSummary);
+    await logAgentAction(userId, 'Orchestrator Analysis', 'ChatAnthropic', state.messages[state.messages.length - 1], response.content, conf);
+
     return { messages: [response] };
 }
 
@@ -41,9 +65,11 @@ function shouldContinue(state: typeof MessagesAnnotation.State) {
 
     // Check if the last message has tool calls
     if (lastMessage.tool_calls?.length > 0) {
-        // Human-in-the-loop: interrupt before sending alerts
-        const hasAlertTool = lastMessage.tool_calls.some((tc: any) => tc.name === 'send_whatsapp_alert');
-        if (hasAlertTool) {
+        // Human-in-the-loop: interrupt before sensitive actions
+        const interruptTools = ['send_whatsapp_alert', 'generate_gst_draft'];
+        const needsInterrupt = lastMessage.tool_calls.some((tc: any) => interruptTools.includes(tc.name));
+
+        if (needsInterrupt) {
             return 'interrupt';
         }
         return 'tools';

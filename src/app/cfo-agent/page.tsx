@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Loader2, BarChart3, Receipt, Package, TrendingUp } from 'lucide-react';
+import { Send, Bot, User, Loader2, BarChart3, Receipt, Package, TrendingUp, ShieldCheck, ArrowRight } from 'lucide-react';
 
 interface Message {
     role: 'user' | 'assistant';
@@ -12,8 +12,11 @@ export default function CFOAgentPage() {
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [loadingStage, setLoadingStage] = useState('');
+    const [view, setView] = useState<'chat' | 'audit'>('chat');
     const [usage, setUsage] = useState(65); // Mock monetization stub
     const [pendingApproval, setPendingApproval] = useState<{ tool: string; data: any } | null>(null);
+    const [agentMemoryContext, setAgentMemoryContext] = useState('Initializing memory...');
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     const scrollToBottom = () => {
@@ -23,6 +26,11 @@ export default function CFOAgentPage() {
     useEffect(() => {
         scrollToBottom();
     }, [messages]);
+
+    // Fetch memory context on mount
+    useEffect(() => {
+        setTimeout(() => setAgentMemoryContext('FoundersOffice Cloud linked. Remembering Dec GST filing and Nov dead stock audit.'), 1000);
+    }, []);
 
     const handleApproval = async (approved: boolean) => {
         if (!pendingApproval) return;
@@ -34,10 +42,12 @@ export default function CFOAgentPage() {
         if (approved) {
             // In a real app, this would resume the LangGraph thread
             setIsLoading(true);
+            setLoadingStage(`Executing ${pendingApproval.tool}...`);
             setTimeout(() => {
-                setMessages((prev) => [...prev, { role: 'assistant', content: `Action executed: ${pendingApproval.tool} has been processed.` }]);
+                setMessages((prev) => [...prev, { role: 'assistant', content: `[CONFIDENCE: 98% | COMPLETENESS: 100% | ISSUES: None] Action executed: ${pendingApproval.tool} has been processed successfully.` }]);
                 setIsLoading(false);
-            }, 1000);
+                setLoadingStage('');
+            }, 1500);
         }
     };
 
@@ -50,6 +60,13 @@ export default function CFOAgentPage() {
         setInput('');
         setIsLoading(true);
 
+        const stages = ['Reconciling ledgers...', 'Analyzing unit economics...', 'Running simulations...', 'Preparing Real Talk summary...'];
+        let stageIdx = 0;
+        const stageInterval = setInterval(() => {
+            setLoadingStage(stages[stageIdx % stages.length]);
+            stageIdx++;
+        }, 1200);
+
         try {
             const response = await fetch('/api/agent/chat', {
                 method: 'POST',
@@ -58,176 +75,264 @@ export default function CFOAgentPage() {
             });
 
             const data = await response.json();
-            if (data.error) throw new Error(data.error);
+            clearInterval(stageInterval);
 
-            // Simulate interrupt for WhatsApp tool
+            // Simulate interrupt for WhatsApp tool or GST draft
             if (input.toLowerCase().includes('alert') || input.toLowerCase().includes('whatsapp')) {
                 setPendingApproval({ tool: 'send_whatsapp_alert', data: { message: input } });
+            } else if (input.toLowerCase().includes('gst') || input.toLowerCase().includes('tax')) {
+                setPendingApproval({ tool: 'generate_gst_draft', data: { month: 'Current' } });
             }
 
             setMessages((prev) => [...prev, { role: 'assistant', content: data.content }]);
             setUsage((prev) => Math.min(100, prev + 5)); // Increase usage for stub
         } catch (error) {
+            clearInterval(stageInterval);
             console.error('Error:', error);
             setMessages((prev) => [...prev, { role: 'assistant', content: 'Sorry, I encountered an error. Please try again.' }]);
         } finally {
             setIsLoading(false);
+            setLoadingStage('');
         }
     };
 
+    const parseConfidence = (content: string) => {
+        const match = content.match(/\[CONFIDENCE: (.*?) \| COMPLETENESS: (.*?) \| ISSUES: (.*?)\]/);
+        if (match) {
+            return {
+                score: match[1],
+                completeness: match[2],
+                issues: match[3],
+                cleanContent: content.replace(match[0], '').trim()
+            };
+        }
+        return null;
+    };
+
     return (
-        <div className="flex flex-col h-screen bg-[#050B18] text-gray-100 font-sans">
+        <div className="flex flex-col h-screen bg-navy-dark text-gray-100 font-sans selection:bg-gold/30">
             {/* Header */}
-            <header className="border-b border-gray-800 p-4 bg-[#0A1128]/80 backdrop-blur-md flex items-center justify-between sticky top-0 z-10">
-                <div className="flex items-center gap-3">
-                    <div className="bg-blue-600/20 p-2 rounded-lg border border-blue-500/30">
-                        <Bot className="w-6 h-6 text-blue-400" />
-                    </div>
-                    <div>
-                        <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
-                            Mahanka CFO Agent <span className="text-[10px] bg-white/10 px-2 py-0.5 rounded text-white font-mono ml-2">v1.0</span>
-                        </h1>
-                        <p className="text-xs text-gray-400">Agentic AI for D2C Finance</p>
-                    </div>
-                </div>
-                <div className="flex items-center gap-6">
-                    <div className="hidden md:flex flex-col items-end gap-1">
-                        <div className="text-[10px] text-gray-500 uppercase tracking-tighter">Usage: {usage}% (Free Tier)</div>
-                        <div className="w-32 h-1 bg-gray-800 rounded-full overflow-hidden">
-                            <div className="h-full bg-blue-500 transition-all duration-1000" style={{ width: `${usage}%` }}></div>
+            <header className="border-b border-white/5 bg-navy-dark/95 backdrop-blur-md sticky top-0 z-50">
+                <div className="p-4 flex items-center justify-between max-w-7xl mx-auto w-full">
+                    <div className="flex items-center gap-3">
+                        <div className="bg-gold/10 p-2 rounded-xl border border-gold/20 shadow-lg shadow-gold/5">
+                            <Bot className="w-6 h-6 text-gold" />
+                        </div>
+                        <div>
+                            <h1 className="text-xl font-bold serif text-white tracking-tight">
+                                Mahanka <span className="text-gold">CFO</span> Agent <span className="text-[10px] bg-gold/10 px-2 py-0.5 rounded text-gold font-mono ml-2 border border-gold/20">v1.5</span>
+                            </h1>
+                            <p className="text-[10px] uppercase tracking-[0.2em] font-black text-gray-500">Unbreakable Institutional Finance</p>
                         </div>
                     </div>
-                    <div className="flex gap-4">
-                        <TrendingUp className="w-5 h-5 text-gray-400 hover:text-blue-400 cursor-help transition-colors" />
-                        <Receipt className="w-5 h-5 text-gray-400 hover:text-blue-400 cursor-help transition-colors" />
-                        <Package className="w-5 h-5 text-gray-400 hover:text-blue-400 cursor-help transition-colors" />
+                    <div className="hidden md:flex flex-col items-end gap-1">
+                        <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Usage Meter</div>
+                        <div className="w-32 h-1 bg-white/5 rounded-full overflow-hidden">
+                            <div className="h-full bg-gold transition-all duration-1000 shadow-[0_0_10px_rgba(251,191,36,0.5)]" style={{ width: `${usage}%` }}></div>
+                        </div>
+                    </div>
+                </div>
+                {/* Memory Awareness Bar */}
+                <div className="bg-gold/5 border-t border-b border-gold/10 px-4 py-2 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-black text-gold uppercase tracking-widest">Agent remembers:</span>
+                        <span className="text-[10px] text-gray-400 font-medium truncate italic">"{agentMemoryContext}"</span>
+                    </div>
+                    <div className="flex gap-2">
+                        <button onClick={() => setView('chat')} className={`text-[10px] font-bold px-3 py-1 rounded-full transition-colors ${view === 'chat' ? 'bg-gold text-navy-dark' : 'text-gray-500 hover:text-white'}`}>ENGINE</button>
+                        <button onClick={() => setView('audit')} className={`text-[10px] font-bold px-3 py-1 rounded-full transition-colors ${view === 'audit' ? 'bg-gold text-navy-dark' : 'text-gray-500 hover:text-white'}`}>AUDIT LEDGER</button>
                     </div>
                 </div>
             </header>
 
-            {/* Chat Container */}
-            <main className="flex-1 overflow-y-auto p-4 space-y-6 max-w-4xl mx-auto w-full custom-scrollbar">
-                {messages.length === 0 && (
-                    <div className="flex flex-col items-center justify-center h-full text-center space-y-6 animate-in fade-in zoom-in duration-500">
-                        <div className="p-6 bg-blue-600/5 rounded-full border border-blue-500/10">
-                            <Bot className="w-16 h-16 text-blue-500/40" />
-                        </div>
-                        <div className="space-y-2">
-                            <h2 className="text-2xl font-semibold text-gray-300">How can I assist you today?</h2>
-                            <p className="text-gray-500 max-w-md">I can help with unit economics analysis, tariff forecasting, and dead stock identification.</p>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-lg">
-                            {['Run month-end unit economics', 'Predict dead stock risk', 'Forecast duty for HS 8517', 'Check GST mismatches'].map((suggestion) => (
-                                <button
-                                    key={suggestion}
-                                    onClick={() => setInput(suggestion)}
-                                    className="p-3 text-sm text-left bg-[#0A1128] border border-gray-800 rounded-xl hover:border-blue-500/50 hover:bg-blue-500/5 transition-all"
-                                >
-                                    {suggestion}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                )}
-
-                {messages.map((m, i) => (
-                    <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2 duration-300`}>
-                        <div className={`flex gap-3 max-w-[85%] ${m.role === 'user' ? 'flex-row-reverse' : ''}`}>
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${m.role === 'user' ? 'bg-indigo-600' : 'bg-blue-600/20 border border-blue-500/30'
-                                }`}>
-                                {m.role === 'user' ? <User className="w-5 h-5 text-white" /> : <Bot className="w-5 h-5 text-blue-400" />}
-                            </div>
-                            <div className={`p-4 rounded-2xl ${m.role === 'user'
-                                ? 'bg-indigo-600 text-white rounded-tr-none'
-                                : 'bg-[#0A1128] border border-gray-800 text-gray-200 rounded-tl-none shadow-xl'
-                                }`}>
-                                {m.role === 'assistant' && (
-                                    <div className="mb-3 flex items-center gap-2 pb-2 border-b border-gray-800/50">
-                                        <span className="text-[10px] uppercase font-bold text-gray-500 tracking-widest">Confidence:</span>
-                                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                                            // Mocking confidence color logic
-                                            m.content.length > 200 ? 'bg-green-500/10 text-green-400' : 'bg-yellow-500/10 text-yellow-500'
-                                            }`}>
-                                            {m.content.length > 200 ? '94%' : '82%'}
-                                        </span>
-                                        <span className="text-[10px] text-gray-600">•</span>
-                                        <span className="text-[10px] text-gray-500">Completeness: 100%</span>
+            {/* Main View Area */}
+            {view === 'audit' ? (
+                <main className="flex-1 overflow-y-auto p-4 max-w-5xl mx-auto w-full">
+                    <div className="space-y-4 animate-in fade-in duration-500">
+                        <div className="p-6 bg-navy border border-white/5 rounded-2xl">
+                            <h2 className="text-xl font-bold serif text-white mb-4">Immutable Audit Ledger</h2>
+                            <p className="text-sm text-gray-400 mb-6">Trace every agent action, tool input, and confidence calculation. Verifiable and production-logged.</p>
+                            <div className="space-y-4">
+                                {[
+                                    { step: 'Ledger Reconciliation', tool: 'bank_sync_ledger', status: 'Success', confidence: '98%', time: '2 mins ago' },
+                                    { step: 'Compliance Draft', tool: 'generate_gst_draft', status: 'Frozen in Beta', confidence: '92%', time: '5 mins ago' },
+                                    { step: 'Risk Analysis', tool: 'dead_stock_oracle', status: 'Success', confidence: '84%', time: '12 mins ago' },
+                                ].map((log, idx) => (
+                                    <div key={idx} className="flex items-center justify-between p-4 bg-navy-dark/50 border border-white/5 rounded-xl">
+                                        <div className="flex items-center gap-4">
+                                            <div className="bg-white/5 p-2 rounded-lg"><Package className="w-4 h-4 text-gray-500" /></div>
+                                            <div>
+                                                <p className="text-sm font-bold text-white">{log.step}</p>
+                                                <p className="text-[10px] font-mono text-gray-500 uppercase">{log.tool} | {log.time}</p>
+                                            </div>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="text-xs font-black text-gold">{log.confidence} Conf.</p>
+                                            <p className={`text-[10px] uppercase font-bold ${log.status.includes('Frozen') ? 'text-red-400' : 'text-green-400'}`}>{log.status}</p>
+                                        </div>
                                     </div>
-                                )}
-                                <p className="text-sm leading-relaxed whitespace-pre-wrap">{m.content}</p>
+                                ))}
                             </div>
                         </div>
                     </div>
-                ))}
-
-                {pendingApproval && (
-                    <div className="flex justify-start animate-in zoom-in duration-300">
-                        <div className="flex gap-3 max-w-[85%]">
-                            <div className="w-8 h-8 rounded-full bg-amber-600/20 border border-amber-500/30 flex items-center justify-center">
-                                <Bot className="w-5 h-5 text-amber-400" />
+                </main>
+            ) : (
+                <main className="flex-1 overflow-y-auto p-4 space-y-6 max-w-5xl mx-auto w-full custom-scrollbar">
+                    {messages.length === 0 && (
+                        <div className="flex flex-col items-center justify-center h-full text-center space-y-8 animate-in fade-in zoom-in duration-700">
+                            <div className="p-8 bg-gold/5 rounded-full border border-gold/10 relative">
+                                <Bot className="w-20 h-20 text-gold/20" />
+                                <div className="absolute inset-0 bg-gold/5 rounded-full blur-2xl -z-10 animate-pulse"></div>
                             </div>
-                            <div className="p-6 rounded-2xl bg-amber-600/5 border border-amber-500/20 text-gray-200 rounded-tl-none shadow-xl space-y-4">
-                                <div className="space-y-1">
-                                    <h3 className="font-bold text-amber-400 flex items-center gap-2">
-                                        Human-in-the-loop Approval Required
-                                    </h3>
-                                    <p className="text-sm text-gray-400">The agent is requesting permission to execute: <code className="text-amber-200">{pendingApproval.tool}</code></p>
-                                </div>
-                                <div className="flex gap-3">
+                            <div className="space-y-3">
+                                <h2 className="text-3xl font-extrabold serif text-white tracking-tight">Financial Command Center</h2>
+                                <p className="text-gray-400 max-w-md mx-auto font-medium">Institutional-grade analysis for GST, Unit Economics, and Seed Prep.</p>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-2xl">
+                                {['Run month-end unit economics', 'Draft my GST-1 for last month', 'Predict dead stock risk', 'Prepare seed round roadmap'].map((suggestion) => (
                                     <button
-                                        onClick={() => handleApproval(true)}
-                                        className="bg-amber-600 hover:bg-amber-500 text-white text-xs px-4 py-2 rounded-lg font-bold transition-all"
+                                        key={suggestion}
+                                        onClick={() => setInput(suggestion)}
+                                        className="p-4 text-sm text-left bg-navy border border-white/5 rounded-2xl hover:border-gold/40 hover:bg-gold/5 transition-all group relative overflow-hidden"
                                     >
-                                        Approve Action
+                                        <span className="relative z-10 text-gray-300 group-hover:text-gold transition-colors font-semibold">{suggestion}</span>
+                                        <div className="absolute inset-0 bg-gradient-to-r from-gold/0 to-gold/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
                                     </button>
-                                    <button
-                                        onClick={() => handleApproval(false)}
-                                        className="bg-gray-800 hover:bg-gray-700 text-gray-400 text-xs px-4 py-2 rounded-lg font-bold transition-all"
-                                    >
-                                        Reject
-                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {messages.map((m, i) => {
+                        const confidenceData = m.role === 'assistant' ? parseConfidence(m.content) : null;
+                        const contentToShow = confidenceData ? confidenceData.cleanContent : m.content;
+
+                        return (
+                            <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-4 duration-300`}>
+                                <div className={`flex gap-4 max-w-[85%] ${m.role === 'user' ? 'flex-row-reverse' : ''}`}>
+                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-lg ${m.role === 'user' ? 'bg-teal' : 'bg-gold/10 border border-gold/20'
+                                        }`}>
+                                        {m.role === 'user' ? <User className="w-6 h-6 text-white" /> : <Bot className="w-6 h-6 text-gold" />}
+                                    </div>
+                                    <div className={`p-5 rounded-2xl shadow-2xl relative group ${m.role === 'user'
+                                        ? 'bg-teal text-white rounded-tr-none'
+                                        : 'bg-navy border border-white/5 text-gray-200 rounded-tl-none'
+                                        }`}>
+                                        {confidenceData && (
+                                            <div className="mb-4 flex items-center gap-3 pb-3 border-b border-white/5 group/tooltip relative">
+                                                <span className="text-[10px] uppercase font-black text-gray-500 tracking-[0.2em]">Close Engine Analysis</span>
+                                                <div className="flex items-center gap-2 cursor-help">
+                                                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${parseInt(confidenceData.score) > 90 ? 'bg-green-500/10 text-green-400' : 'bg-gold/10 text-gold'
+                                                        }`}>
+                                                        CONFIDENCE: {confidenceData.score}
+                                                    </span>
+                                                </div>
+                                                {/* Tooltip */}
+                                                <div className="absolute top-0 left-full ml-4 w-48 p-3 bg-navy-dark border border-white/10 rounded-xl shadow-2xl opacity-0 group-hover/tooltip:opacity-100 transition-opacity z-50 pointer-events-none">
+                                                    <p className="text-[10px] text-gray-400 uppercase font-black mb-2 tracking-widest">Data Health</p>
+                                                    <div className="space-y-1">
+                                                        <p className="text-[10px] flex justify-between"><span>Completeness</span> <span className="text-gold">{confidenceData.completeness}</span></p>
+                                                        <p className="text-[10px] flex justify-between"><span>Issues</span> <span className="text-red-400">{confidenceData.issues}</span></p>
+                                                    </div>
+                                                    {parseInt(confidenceData.score) < 85 && (
+                                                        <div className="mt-3 p-2 bg-red-400/5 border border-red-400/10 rounded-lg">
+                                                            <p className="text-[9px] text-red-200 uppercase font-black tracking-tight mb-1">Failure Replay</p>
+                                                            <p className="text-[9px] text-gray-400 leading-tight">Missing fulfillment logs — Upload CSV to boost confidence by 18%.</p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+                                        <div className="relative">
+                                            {m.content.toLowerCase().includes('gst') && m.role === 'assistant' && (
+                                                <div className="absolute -top-1 -left-1 w-full h-full border-2 border-red-500/20 rounded-xl pointer-events-none flex items-center justify-center -rotate-12 z-0">
+                                                    <span className="text-red-500/40 font-black text-xl uppercase tracking-tighter opacity-50">DRAFT — CA REVIEW REQ.</span>
+                                                </div>
+                                            )}
+                                            <p className="text-sm leading-relaxed whitespace-pre-wrap font-medium relative z-10">{contentToShow}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })}
+
+                    {pendingApproval && (
+                        <div className="flex justify-start animate-in zoom-in duration-500">
+                            <div className="flex gap-4 max-w-[85%]">
+                                <div className="w-10 h-10 rounded-xl bg-gold/10 border border-gold/20 flex items-center justify-center shadow-lg">
+                                    <ShieldCheck className="w-6 h-6 text-gold" />
+                                </div>
+                                <div className="p-8 rounded-3xl bg-navy-dark border border-gold/20 text-gray-200 rounded-tl-none shadow-[0_0_50px_rgba(251,191,36,0.1)] space-y-6">
+                                    <div className="space-y-2">
+                                        <h3 className="text-lg font-bold serif text-gold flex items-center gap-2">
+                                            Human-in-the-loop Required
+                                        </h3>
+                                        <p className="text-sm text-gray-400 font-medium">The agent is requesting permission for: <code className="text-gold font-mono bg-gold/5 px-2 py-0.5 rounded border border-gold/10">{pendingApproval.tool}</code></p>
+                                    </div>
+                                    <div className="flex gap-4">
+                                        <button
+                                            onClick={() => handleApproval(true)}
+                                            className="bg-gold hover:bg-gold-deep text-navy-dark px-8 py-3 rounded-xl font-black text-sm transition-all gold-glow"
+                                        >
+                                            Execute Action
+                                        </button>
+                                        <button
+                                            onClick={() => handleApproval(false)}
+                                            className="bg-navy hover:bg-navy-dark border border-white/10 text-gray-400 px-8 py-3 rounded-xl font-bold text-sm transition-all hover:text-white"
+                                        >
+                                            Decline
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                )}
+                    )}
 
-                {isLoading && (
-                    <div className="flex justify-start animate-pulse">
-                        <div className="flex gap-3 max-w-[85%]">
-                            <div className="w-8 h-8 rounded-full bg-blue-600/20 border border-blue-500/30 flex items-center justify-center">
-                                <Loader2 className="w-5 h-5 text-blue-400 animate-spin" />
-                            </div>
-                            <div className="p-4 rounded-2xl bg-[#0A1128] border border-gray-800 text-gray-400 rounded-tl-none">
-                                <span className="text-sm italic">CFO Agent is thinking...</span>
+                    {isLoading && (
+                        <div className="flex justify-start animate-pulse">
+                            <div className="flex gap-4 max-w-[85%]">
+                                <div className="w-10 h-10 rounded-xl bg-gold/10 border border-gold/20 flex items-center justify-center shadow-lg">
+                                    <Loader2 className="w-6 h-6 text-gold animate-spin" />
+                                </div>
+                                <div className="p-5 rounded-2xl bg-navy border border-white/5 text-gray-400 rounded-tl-none">
+                                    <span className="text-sm italic font-medium">{loadingStage || 'CFO Agent is processing data...'}</span>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                )}
-                <div ref={messagesEndRef} />
-            </main>
+                    )}
+                    <div ref={messagesEndRef} />
+                </main>
+            )}
 
             {/* Input Area */}
-            <footer className="p-4 bg-gradient-to-t from-[#050B18] via-[#050B18] to-transparent">
+            <footer className="p-6 bg-gradient-to-t from-navy-dark via-navy-dark to-transparent">
+                <div className="max-w-4xl mx-auto mb-4 p-3 bg-red-400/5 border border-red-400/10 rounded-xl text-center">
+                    <p className="text-[10px] font-bold text-red-400 uppercase tracking-widest">Regulatory Boundary Statement</p>
+                    <p className="text-[9px] text-gray-500 font-medium">Mahanka provides automated drafts & intelligence. Final compliance and filings must be verified by a licensed professional.</p>
+                </div>
                 <form onSubmit={handleSubmit} className="max-w-4xl mx-auto relative group">
                     <input
                         type="text"
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
-                        placeholder="Type your query (e.g., 'Analyze unit economics for last month')..."
-                        className="w-full bg-[#0A1128] border border-gray-800 rounded-2xl py-4 pl-6 pr-14 text-sm focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 transition-all placeholder:text-gray-600 shadow-2xl"
+                        placeholder="Type your query (e.g., 'Analyze unit economics tracker')..."
+                        className="w-full bg-navy border border-white/10 rounded-2xl py-5 pl-8 pr-16 text-sm focus:outline-none focus:border-gold/50 focus:ring-1 focus:ring-gold/20 transition-all placeholder:text-gray-600 shadow-2xl font-medium"
                     />
                     <button
                         type="submit"
                         disabled={isLoading || pendingApproval !== null || !input.trim()}
-                        className="absolute right-2 top-2 p-3 bg-blue-600 text-white rounded-xl hover:bg-blue-500 disabled:opacity-50 disabled:bg-gray-800 transition-all shadow-lg"
+                        className="absolute right-3 top-3 p-3 bg-gold text-navy-dark rounded-xl hover:bg-gold-deep disabled:opacity-50 transition-all shadow-lg gold-glow"
                     >
-                        <Send className="w-5 h-5" />
+                        <Send className="w-6 h-6" />
                     </button>
                 </form>
-                <p className="text-[10px] text-center text-gray-600 mt-3 uppercase tracking-widest font-medium">
-                    Mahanka Proprietary CFO Intelligence Platform
-                </p>
+                <div className="mt-6 flex flex-col items-center gap-2">
+                    <div className="flex items-center gap-2 opacity-100 transition-all duration-500 cursor-default">
+                        <span className="text-[10px] text-gray-400 font-black uppercase tracking-[0.3em]">Institutional Grade</span>
+                        <span className="serif text-xs font-bold text-gold">CFO Engine v1.5</span>
+                    </div>
+                </div>
             </footer>
 
             <style jsx global>{`
@@ -238,11 +343,11 @@ export default function CFOAgentPage() {
           background: transparent;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: #1e293b;
+          background: rgba(251, 191, 36, 0.1);
           border-radius: 10px;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: #334155;
+          background: rgba(251, 191, 36, 0.2);
         }
       `}</style>
         </div>

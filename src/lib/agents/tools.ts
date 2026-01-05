@@ -84,20 +84,95 @@ export const generatePDFReportTool = tool(
 
 export const sendWhatsAppAlertTool = tool(
     async ({ message, priority }) => {
-        // Placeholder for WhatsApp API integration (e.g., Twilio or 360dialog)
-        console.log(`[WhatsApp Alert] Priority: ${priority} | Message: ${message}`);
+        // [FREEZE AUTONOMY] Action is frozen in Beta
+        console.log(`[WhatsApp Alert - FROZEN] Priority: ${priority} | Message: ${message}`);
         return {
             success: true,
-            status: 'queued',
-            message: 'Alert sent via WhatsApp routing service.'
+            status: 'FROZEN_IN_BETA',
+            message: 'WhatsApp routing service is active but execution is frozen in Beta. Alert logged to Audit Ledger.'
         };
     },
     {
         name: 'send_whatsapp_alert',
-        description: 'Sends high-priority alert (Risk Monitor). Human-in-the-loop required.',
+        description: 'Logs high-priority alert (Risk Monitor). No-execution mode active.',
         schema: z.object({
             message: z.string().describe('The alert message to send'),
             priority: z.enum(['low', 'medium', 'high']).describe('Priority level of the alert'),
+        }),
+    }
+);
+
+export const generateGSTDraftTool = tool(
+    async ({ month, salesData }) => {
+        // [FREEZE AUTONOMY] Action is frozen in Beta
+        return {
+            success: true,
+            status: 'FROZEN_IN_BETA',
+            month,
+            draft: {
+                section: 'B2B',
+                records: salesData.length,
+                totalValue: salesData.reduce((acc: number, curr: any) => acc + curr.amount, 0),
+                taxPayable: salesData.reduce((acc: number, curr: any) => acc + (curr.amount * 0.18), 0),
+            },
+            message: 'GST-1 Draft created but NOT FILED. Action frozen in Beta — requires manual review and CA upload.'
+        };
+    },
+    {
+        name: 'generate_gst_draft',
+        description: 'Generates a GST-1 draft (Audit Only). No-execution mode active.',
+        schema: z.object({
+            month: z.string().describe('The month for the GST draft (e.g., "Jan 2024")'),
+            salesData: z.array(z.any()).describe('List of sales records for the period'),
+        }),
+    }
+);
+
+export const calculateBudgetVarianceTool = tool(
+    async ({ period, actuals, budget }) => {
+        const variance = actuals - budget;
+        const percentage = (variance / budget) * 100;
+        return {
+            success: true,
+            period,
+            variance: variance.toFixed(2),
+            percentage: percentage.toFixed(1) + '%',
+            status: variance > 0 ? 'over-budget' : 'under-budget',
+            recommendation: variance > 0 ? 'Review discretionary spending.' : 'Healthy margin maintained.'
+        };
+    },
+    {
+        name: 'calculate_budget_variance',
+        description: 'Analyzes variance between actual spend and budget (Projection Agent).',
+        schema: z.object({
+            period: z.string().describe('The time period for analysis'),
+            actuals: z.number().describe('Actual spend amount'),
+            budget: z.number().describe('Budgeted amount'),
+        }),
+    }
+);
+
+export const prepareFundraisingChecklistTool = tool(
+    async ({ stage, industry }) => {
+        const items = [
+            'Update 3-year P&L Projections',
+            'Refresh Data Room (Cap Table, Contracts)',
+            'Prepare Investor Deck (v1.5 Draft)',
+            'Identify 10 Target VCs for ' + stage,
+        ];
+        return {
+            success: true,
+            stage,
+            checklist: items,
+            message: 'Fundraising checklist generated for ' + stage + ' round.'
+        };
+    },
+    {
+        name: 'prepare_fundraising_checklist',
+        description: 'Prepares a due diligence and fundraising readiness checklist (Risk Agent).',
+        schema: z.object({
+            stage: z.enum(['pre-seed', 'seed', 'series-a']).describe('The target funding stage'),
+            industry: z.string().describe('The industry sector (e.g., D2C, Fintech)'),
         }),
     }
 );
@@ -107,5 +182,8 @@ export const tools = [
     tariffForecasterTool,
     unitEconomicsTool,
     generatePDFReportTool,
-    sendWhatsAppAlertTool
+    sendWhatsAppAlertTool,
+    generateGSTDraftTool,
+    calculateBudgetVarianceTool,
+    prepareFundraisingChecklistTool
 ];

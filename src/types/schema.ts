@@ -39,12 +39,45 @@ export interface GST {
 }
 
 export interface Cashflow {
-  period: string;
-  inflow: number;
-  outflow: number;
-  netCashflow: number;
-  openingBalance: number;
-  closingBalance: number;
+    id: string;
+    month: string;
+    inflow: number;
+    outflow: number;
+    net: number;
+}
+
+export interface GSTCompliance {
+    month: string;
+    gst1_draft: any;
+    gst3b_draft: any;
+    tds_summary: {
+        category: string;
+        amount: number;
+        rate: number;
+    }[];
+    status: 'draft' | 'filed';
+}
+
+export interface BudgetForecast {
+    period: string;
+    revenue_target: number;
+    expense_budget: number;
+    growth_lever: 'aggressive' | 'steady' | 'conservative';
+    projected_burn: number;
+}
+
+export interface FundraisingPrep {
+    stage: 'pre-seed' | 'seed' | 'series-a';
+    valuation_ask: number;
+    milestones: string[];
+    capital_allocation: {
+        department: string;
+        percentage: number;
+    }[];
+    document_status: {
+        deck: boolean;
+        data_room: boolean;
+    };
 }
 
 export interface UnifiedFinancialState {

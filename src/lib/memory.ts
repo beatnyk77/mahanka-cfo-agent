@@ -49,3 +49,22 @@ export async function addActionToMemory(userId: string, action: string) {
         console.error('Error updating user memory:', error);
     }
 }
+
+export async function logAgentAction(userId: string, step: string, tool: string, input: any, output: any, confidence: string) {
+    try {
+        const db = getFirestoreDb();
+        const ledgerRef = doc(db, 'agent_ledger', `${userId}_${Date.now()}`);
+        await setDoc(ledgerRef, {
+            userId,
+            step,
+            tool,
+            input,
+            output,
+            confidence,
+            timestamp: new Date().toISOString(),
+            status: tool.includes('gst') || tool.includes('alert') ? 'Frozen in Beta' : 'Success'
+        });
+    } catch (error) {
+        console.error('Error logging agent action:', error);
+    }
+}
