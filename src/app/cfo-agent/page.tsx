@@ -1,11 +1,19 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Loader2, BarChart3, Receipt, Package, TrendingUp, ShieldCheck, ArrowRight } from 'lucide-react';
+import { Send, Bot, User, Loader2, BarChart3, Receipt, Package, TrendingUp, ShieldCheck, ArrowRight, Upload, FileSpreadsheet, CheckCircle2, X } from 'lucide-react';
 
 interface Message {
     role: 'user' | 'assistant';
     content: string;
+}
+
+interface TallyImportState {
+    isImporting: boolean;
+    success: boolean;
+    error: string | null;
+    summary: string | null;
+    confidenceBoost: number;
 }
 
 export default function CFOAgentPage() {
@@ -17,6 +25,15 @@ export default function CFOAgentPage() {
     const [usage, setUsage] = useState(65); // Mock monetization stub
     const [pendingApproval, setPendingApproval] = useState<{ tool: string; data: any } | null>(null);
     const [agentMemoryContext, setAgentMemoryContext] = useState('Initializing memory...');
+    const [tallyImport, setTallyImport] = useState<TallyImportState>({
+        isImporting: false,
+        success: false,
+        error: null,
+        summary: null,
+        confidenceBoost: 0,
+    });
+    const [showTallyModal, setShowTallyModal] = useState(false);
+    const tallyFileInputRef = useRef<HTMLInputElement>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     const scrollToBottom = () => {
@@ -31,6 +48,65 @@ export default function CFOAgentPage() {
     useEffect(() => {
         setTimeout(() => setAgentMemoryContext('FoundersOffice Cloud linked. Remembering Dec GST filing and Nov dead stock audit.'), 1000);
     }, []);
+
+    // Handle Tally XML file upload
+    const handleTallyFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        if (!file.name.endsWith('.xml')) {
+            setTallyImport(prev => ({ ...prev, error: 'Please upload a valid XML file.' }));
+            return;
+        }
+
+        setTallyImport(prev => ({ ...prev, isImporting: true, error: null }));
+        setShowTallyModal(false);
+
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const response = await fetch('/api/tally/import', {
+                method: 'POST',
+                body: formData,
+            });
+
+            const result = await response.json();
+
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || 'Failed to import Tally data');
+            }
+
+            setTallyImport({
+                isImporting: false,
+                success: true,
+                error: null,
+                summary: result.summary,
+                confidenceBoost: result.confidenceBoost || 18,
+            });
+
+            // Update memory context
+            setAgentMemoryContext(prev => `${prev} | Tally ledger imported (+18% confidence).`);
+
+            // Add a message to the chat
+            setMessages(prev => [...prev, {
+                role: 'assistant',
+                content: `[CONFIDENCE: +18% Boost | DATA SOURCE: Tally ERP | STATUS: Verified]\n\n✅ **Tally data imported successfully!**\n\n${result.summary}\n\nYou can now ask me to analyze your sales, purchases, inventory, GST compliance, or bank reconciliation with higher accuracy.`
+            }]);
+
+        } catch (error: any) {
+            setTallyImport(prev => ({
+                ...prev,
+                isImporting: false,
+                error: error.message || 'Failed to import Tally data',
+            }));
+        }
+
+        // Reset file input
+        if (tallyFileInputRef.current) {
+            tallyFileInputRef.current.value = '';
+        }
+    };
 
     const handleApproval = async (approved: boolean) => {
         if (!pendingApproval) return;
@@ -125,10 +201,25 @@ export default function CFOAgentPage() {
                             <p className="text-[10px] uppercase tracking-[0.2em] font-black text-gray-500">Unbreakable Institutional Finance</p>
                         </div>
                     </div>
-                    <div className="hidden md:flex flex-col items-end gap-1">
-                        <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Usage Meter</div>
-                        <div className="w-32 h-1 bg-white/5 rounded-full overflow-hidden">
-                            <div className="h-full bg-gold transition-all duration-1000 shadow-[0_0_10px_rgba(251,191,36,0.5)]" style={{ width: `${usage}%` }}></div>
+                    <div className="hidden md:flex items-center gap-4">
+                        {/* Tally Import Button */}
+                        <button
+                            onClick={() => setShowTallyModal(true)}
+                            disabled={tallyImport.isImporting}
+                            className="flex items-center gap-2 px-4 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 rounded-xl text-emerald-400 text-xs font-bold transition-all disabled:opacity-50"
+                        >
+                            {tallyImport.isImporting ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                                <FileSpreadsheet className="w-4 h-4" />
+                            )}
+                            Import Tally Ledger XML
+                        </button>
+                        <div className="flex flex-col items-end gap-1">
+                            <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Usage Meter</div>
+                            <div className="w-32 h-1 bg-white/5 rounded-full overflow-hidden">
+                                <div className="h-full bg-gold transition-all duration-1000 shadow-[0_0_10px_rgba(251,191,36,0.5)]" style={{ width: `${usage}%` }}></div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -143,7 +234,83 @@ export default function CFOAgentPage() {
                         <button onClick={() => setView('audit')} className={`text-[10px] font-bold px-3 py-1 rounded-full transition-colors ${view === 'audit' ? 'bg-gold text-navy-dark' : 'text-gray-500 hover:text-white'}`}>AUDIT LEDGER</button>
                     </div>
                 </div>
+
+                {/* Tally Success Banner */}
+                {tallyImport.success && (
+                    <div className="bg-emerald-500/10 border-t border-b border-emerald-500/20 px-4 py-2 flex items-center justify-between animate-in slide-in-from-top duration-300">
+                        <div className="flex items-center gap-2">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                            <span className="text-[11px] font-bold text-emerald-400">Tally data detected — confidence +{tallyImport.confidenceBoost}%</span>
+                        </div>
+                        <button
+                            onClick={() => setTallyImport(prev => ({ ...prev, success: false }))}
+                            className="text-emerald-400/50 hover:text-emerald-400 transition-colors"
+                        >
+                            <X className="w-4 h-4" />
+                        </button>
+                    </div>
+                )}
+
+                {/* Tally Error Banner */}
+                {tallyImport.error && (
+                    <div className="bg-red-500/10 border-t border-b border-red-500/20 px-4 py-2 flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-red-400">⚠️ {tallyImport.error}</span>
+                        <button
+                            onClick={() => setTallyImport(prev => ({ ...prev, error: null }))}
+                            className="text-red-400/50 hover:text-red-400 transition-colors"
+                        >
+                            <X className="w-4 h-4" />
+                        </button>
+                    </div>
+                )}
             </header>
+
+            {/* Tally Import Modal */}
+            {showTallyModal && (
+                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center animate-in fade-in duration-200">
+                    <div className="bg-navy border border-gold/20 rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl animate-in zoom-in-95 duration-300">
+                        <div className="flex items-center justify-between mb-6">
+                            <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                                <FileSpreadsheet className="w-6 h-6 text-emerald-400" />
+                                Import Tally Ledger XML
+                            </h2>
+                            <button
+                                onClick={() => setShowTallyModal(false)}
+                                className="text-gray-500 hover:text-white transition-colors"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        <p className="text-sm text-gray-400 mb-6">
+                            Upload your Tally ERP XML export to automatically extract sales vouchers, purchase data, inventory items, GST details, and bank payments.
+                        </p>
+
+                        <div className="border-2 border-dashed border-gold/20 rounded-xl p-8 text-center hover:border-gold/40 transition-colors cursor-pointer"
+                            onClick={() => tallyFileInputRef.current?.click()}
+                        >
+                            <Upload className="w-12 h-12 text-gold/50 mx-auto mb-4" />
+                            <p className="text-sm font-bold text-gray-300 mb-2">Drop your Tally XML file here</p>
+                            <p className="text-xs text-gray-500">or click to browse</p>
+                        </div>
+
+                        <input
+                            ref={tallyFileInputRef}
+                            type="file"
+                            accept=".xml"
+                            onChange={handleTallyFileUpload}
+                            className="hidden"
+                        />
+
+                        <div className="mt-6 p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-xl">
+                            <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest mb-2">Confidence Boost</p>
+                            <p className="text-xs text-gray-400">
+                                Importing Tally data increases analysis confidence by <span className="text-emerald-400 font-bold">+18%</span> for GST reconciliation, unit economics, and financial forecasting.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Main View Area */}
             {view === 'audit' ? (
